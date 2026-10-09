@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Face Privacy Shield</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        h1 { margin-bottom: 20px; }
+        .container {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .box {
+            text-align: center;
+            background: #1e293b;
+            padding: 15px;
+            border-radius: 10px;
+        }
+        video, img {
+            width: 480px;
+            height: 360px;
+            border-radius: 8px;
+            background: #000;
+            object-fit: cover;
+        }
+        button {
+            margin-top: 15px;
+            padding: 10px 20px;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+            background-color: #2563eb;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover { background-color: #1d4ed8; }
+    </style>
+</head>
+<body>
+
+    <h1>Live Face Privacy Shield</h1>
+
+    <div class="container">
+        <div class="box">
+            <h3>Webcam Feed</h3>
+            <video id="webcam" autoplay playsinline muted></video>
+        </div>
+        <div class="box">
+            <h3>Live Anonymized Feed</h3>
+            <img id="processedFeed" alt="Live Blurred Feed Will Appear Here" />
+        </div>
+    </div>
+
+    <button id="startBtn" onclick="startCamera()">Start Live Anonymizer</button>
+    <canvas id="canvas" style="display:none;"></canvas>
+
+    <script>
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('canvas');
+        const processedImg = document.getElementById('processedFeed');
+        let isRunning = false;
+
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+                isRunning = true;
+                document.getElementById('startBtn').style.display = 'none';
+                sendFrameLoop();
+            } catch (err) {
+                alert("Camera access denied or not available!");
+                console.error(err);
+            }
+        }
+
+        async function sendFrameLoop() {
+            if (!isRunning) return;
+
+            const context = canvas.getContext('2d');
+            canvas.width = video.videoWidth || 480;
+            canvas.height = video.videoHeight || 360;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            canvas.toBlob(async (blob) => {
+                if (blob) {
+                    const formData = new FormData();
+                    formData.append('frame', blob, 'frame.jpg');
+
+                    try {
+                        const response = await fetch('/process_frame', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        if (response.ok) {
+                            const imageBlob = await response.blob();
+                            processedImg.src = URL.createObjectURL(imageBlob);
+                        }
+                    } catch (e) {
+                        console.error("Frame processing error:", e);
+                    }
+                }
+                // Send next frame after 100ms (~10 FPS for smooth local streaming)
+                setTimeout(sendFrameLoop, 100);
+            }, 'image/jpeg', 0.7);
+        }
+    </script>
+</body>
+</html>
